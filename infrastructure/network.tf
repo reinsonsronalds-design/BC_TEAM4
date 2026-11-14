@@ -26,10 +26,12 @@ resource "aws_vpc_security_group_ingress_rule" "alb_https" {
   ip_protocol       = "tcp"
 }
 resource "aws_vpc_security_group_egress_rule" "alb_egress" {
-  count             = var.enable_application ? 1 : 0
-  security_group_id = aws_security_group.alb[0].id
-  cidr_ipv4         = "0.0.0.0/0"
-  ip_protocol       = "-1"
+  count                        = var.enable_application ? 1 : 0
+  security_group_id            = aws_security_group.alb[0].id
+  referenced_security_group_id = aws_security_group.app[0].id
+  ip_protocol                  = "tcp"
+  from_port                    = 80
+  to_port                      = 80
 }
 resource "aws_security_group" "app" {
   count       = var.enable_application ? 1 : 0
@@ -49,5 +51,7 @@ resource "aws_vpc_security_group_egress_rule" "app_egress" {
   count             = var.enable_application ? 1 : 0
   security_group_id = aws_security_group.app[0].id
   cidr_ipv4         = "0.0.0.0/0"
-  ip_protocol       = "-1"
+  ip_protocol       = "tcp"
+  from_port         = 443
+  to_port           = 443
 }
