@@ -1,5 +1,5 @@
 when:
-  - event: [push, deployment]
+  - event: [push, manual, deployment]
     branch: feature/ecs-fargate
 
 steps:
@@ -22,7 +22,7 @@ steps:
       password:
         from_secret: dockerhub_token
     when:
-      - event: push
+      - event: [push, manual]
 
   - name: deploy-fargate
     image: public.ecr.aws/aws-cli/aws-cli:2.27.41
