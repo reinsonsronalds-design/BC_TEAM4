@@ -1,6 +1,6 @@
 resource "aws_lb" "app" {
   count                      = var.enable_application ? 1 : 0
-  name                       = "${var.project_name}-alb"
+  name                       = "${var.project_name}-demo-alb"
   internal                   = false
   load_balancer_type         = "application"
   security_groups            = [aws_security_group.alb[0].id]
