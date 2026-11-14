@@ -41,7 +41,7 @@ resource "aws_ecs_task_definition" "app" {
   container_definitions = jsonencode([
     {
       name      = "backend"
-      image     = "${aws_ecr_repository.backend.repository_url}:${var.backend_image_tag}"
+      image     = "${data.aws_ecr_repository.backend.repository_url}:${var.backend_image_tag}"
       essential = true
       command   = ["sh", "-c", "python migrate.py && exec uvicorn app:app --host 0.0.0.0 --port 8000"]
       environment = [
@@ -62,7 +62,7 @@ resource "aws_ecs_task_definition" "app" {
     },
     {
       name         = "frontend"
-      image        = "${aws_ecr_repository.frontend.repository_url}:${var.frontend_image_tag}"
+      image        = "${data.aws_ecr_repository.frontend.repository_url}:${var.frontend_image_tag}"
       essential    = true
       portMappings = [{ containerPort = 80, protocol = "tcp" }]
       environment  = [{ name = "BACKEND_HOST", value = "127.0.0.1:8000" }]
@@ -100,7 +100,7 @@ resource "aws_ecs_task_definition" "notifications" {
   container_definitions = jsonencode([
     for role in ["outbox", "discord"] : {
       name      = role
-      image     = "${aws_ecr_repository.backend.repository_url}:${var.backend_image_tag}"
+      image     = "${data.aws_ecr_repository.backend.repository_url}:${var.backend_image_tag}"
       command   = ["python", role == "outbox" ? "outbox_publisher.py" : "notification_worker.py"]
       essential = true
       environment = concat([
