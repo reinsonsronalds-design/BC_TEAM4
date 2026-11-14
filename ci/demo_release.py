@@ -103,7 +103,7 @@ def release(tag: str, execute: bool) -> None:
     setup_terraform()
     existing = state_resources()
     # Reject any existing state that doesn't belong to this lab before applying.
-    legacy = [v for v in existing if any(t in v for t in ("aws_ecr_repository.", "aws_db_instance.", "aws_sqs_queue."))]
+    legacy = [v for v in existing if v.startswith(("aws_ecr_repository.", "aws_db_instance.", "aws_sqs_queue."))]
     if legacy:
         raise ReleaseError("Unexpected legacy state resources detected; refusing deployment")
     if "aws_ecs_service.blue[0]" not in existing or "aws_ecs_service.green[0]" not in existing:
