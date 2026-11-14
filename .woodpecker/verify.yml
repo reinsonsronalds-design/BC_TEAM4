@@ -1,10 +1,10 @@
 # ACTIVATE ONLY after ECR secret rotation works:
 #   cp ci/verify-publish.yml.example .woodpecker/verify.yml
-# Then commit and push on devops/woodpecker-fargate.
+# Use the approved demo branch; no GitHub webhook required.
 # No AWS access keys, Docker socket, or privileged Kaniko needed in pipeline.
 when:
-  - event: push
-    branch: devops/woodpecker-fargate
+  - event: [push, manual]
+    branch: devops/demo-pipeline
 
 steps:
   - name: unit-tests

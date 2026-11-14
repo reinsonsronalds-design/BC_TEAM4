@@ -1,33 +1,20 @@
-# Copy to terraform.tfvars (gitignored) before planning.
-# Do not place secrets or AWS credentials here.
-aws_region       = "eu-west-1"
-project_name     = "slice-sip"
+# Copy to /opt/slice-sip-demo/infrastructure/terraform.tfvars on the EC2 CI host.
+# This is a new Terraform state root and never manages the existing ECR repos.
+aws_region = "eu-west-1"
+project_name = "slice-sip"
 existing_ci_instance_id = "i-0eb789ac23be694c0"
-
-# STAGE 1: keep both false for first infrastructure plan.
-enable_database    = false
-enable_application = false
-
-# STAGE 2: enable RDS when ready for ongoing AWS charges.
-# enable_database = true
-
-# STAGE 3: only after publishing initial images to ECR:
-# enable_application = true
-# frontend_image_tag = "<immutable-commit-tag-already-pushed>"
-# backend_image_tag  = "<immutable-commit-tag-already-pushed>"
-
-# Optional ACM certificate for your application domain (strongly recommended).
-# app_certificate_arn = "arn:aws:acm:eu-west-1:123456789012:certificate/..."
-
-# Shared bootcamp networking (use only after instructor approval).
-existing_vpc_id       = "vpc-04b6091923e283784"
-alb_public_subnet_ids  = ["subnet-09499899162c048f7", "subnet-0085786c1374a372c"]
-ecs_private_subnet_ids = ["subnet-0d967012a216e6162", "subnet-044a7aac53c2aa425"]
-rds_isolated_subnet_ids = ["subnet-0f680f23bd1732c26", "subnet-0ffb7e6df0653fa22"]
-
-# Phase 6K: reference IAM roles provided by bootcamp instructors (NOT AWS keys).
-existing_ecs_execution_role_name = "ecsTaskExecutionRole"
-# Set these only after the instructor creates each role and confirms permissions:
-# app_task_role_arn           = "arn:aws:iam::<ACCOUNT_ID>:role/<APP_ROLE>"
-# notifications_task_role_arn = "arn:aws:iam::<ACCOUNT_ID>:role/<WORKER_ROLE>"
-# ecs_infrastructure_role_arn = "arn:aws:iam::<ACCOUNT_ID>:role/<BLUE_GREEN_ROLE>"
+existing_vpc_id = "vpc-04b6091923e283784"
+# Verify IGW / NAT routes, subnet permissions, and distinct AZs FIRST.
+alb_public_subnet_ids = ["subnet-09499899162c048f7", "subnet-0085786c1374a372c"]
+ecs_subnet_ids = ["subnet-0d967012a216e6162", "subnet-044a7aac53c2aa425"]
+ecs_assign_public_ip = false
+# The host orchestrator supplies enable_application=true and immutable image_tag
+# ONLY after tests and Kaniko pushes have succeeded.
+# Secret injection requires independent task EXECUTION role permissions and
+# pre-populated secrets. Disabled until verified.
+enable_discord_webhooks = false
+# discord_webhook_secret_arns = {
+#   orders = "arn:aws:secretsmanager:eu-west-1:597765856364:secret:..."
+#   invoices = "arn:aws:secretsmanager:eu-west-1:597765856364:secret:..."
+#   support = "arn:aws:secretsmanager:eu-west-1:597765856364:secret:..."
+# }

@@ -1,130 +1,81 @@
-# Slice & Sip – DevOps Capstone
+# Slice & Sip — DevOps Bootcamp CI/CD Demo
 
-Slice & Sip is a demonstration food-ordering application used to demonstrate infrastructure as code, configuration management, container builds, CI/CD, blue/green deployment and operational notifications.
+**Current build: stateless application + EC2-hosted Woodpecker + Terraform/Ansible + AWS ECS Fargate.**
 
-## Agreed architecture
+Start with the existing bootcamp EC2 and its CI control plane, but **no
+Slice & Sip ECS cluster, ALB, services, queues or database**. An approved,
+versioned S3 bucket for Terraform state and the two legacy ECR repositories
+can exist before the demonstration. The EC2 host contains trusted automation
+scripts, but no application containers are running there.
 
-- **EC2 (bootcamp custom OS; Ubuntu 22.04 pending verification):** Woodpecker CI server and agent, build execution and Ansible control node only. It does not host the website or application services.
-- **ECS Fargate:** NGINX frontend, Python API and notification worker containers.
-- **ECR:** application container images.
-- **ALB + deployment controller (TBD):** ECS blue/green traffic shifting and rollback. The earlier Terraform still has CodeDeploy; native ECS deployment is being evaluated before activation.
-- **RDS PostgreSQL:** order, invoice, support-ticket and notification-outbox data.
-- **Secrets Manager:** four Discord webhook secrets.
-- **SQS + DLQ:** asynchronous notification delivery and retry handling.
-- **CloudWatch + EventBridge:** metrics, logs and monitoring notifications.
-- **Terraform + Ansible:** infrastructure provisioning and configuration/deployment automation.
+## Presentation
 
-Jenkins and GitHub Actions are not used. GitHub remains the source repository and sends push webhooks to Woodpecker.
+1. Push to `devops/demo-pipeline` on GitHub.
+2. EC2 Git poller detects a new commit without an inbound webhook or ngrok.
+3. It asks the locally running Woodpecker API to run the repository pipeline.
+4. Woodpecker tests FastAPI and publishes immutable frontend/backend image
+   tags `<full-git-sha>-<pipeline-number>` with Kaniko to the existing ECR repos.
+5. EC2 host validates the successful Woodpecker run and both ECR images; only
+   then Terraform provisions the app on ECS Fargate. Ansible is used for
+   subsequent releases.
+6. Change a visible HTML string and push again. Woodpecker publishes two new
+   images; Ansible updates the inactive Fargate service, waits for ALB `/ready`
+   healthy status, moves 100% production traffic, observes a short bake period,
+   and scales down the old Fargate service.
+7. An explicit, restricted `terraform destroy` deletes **project-owned** AWS
+   resources, not the bootcamp EC2, shared VPC/subnets, S3 state bucket or ECR.
 
-## Current application API
+## Deliberately simpler than the older architecture
 
-- `GET /health` – API liveness check.
-- `GET /ready` – PostgreSQL readiness check.
-- `POST /api/orders` – creates an order and its invoice in one database transaction.
-- `POST /api/support` – creates a support ticket and notification event.
+- **No database** (no RDS, SQL migration, or persisted orders).
+- **No SQS/DLQ/EventBridge notification routing/notification worker**.
+- **No additional IAM roles created or modified**. EC2 uses its existing
+  `Bootcamp-Instance-Profile` and the *existing* `ecsTaskExecutionRole`.
+- **Blue/green with two ECS services and a weighted ALB rule**, controlled by
+  the EC2 instance profile's existing `ecs:*` and `elasticloadbalancing:*`
+  permissions. This is not the newer ECS-native blue/green strategy.
+- **CloudWatch** logs and two alarms; no log-retention policy.
+- **S3** state with native locking, no DynamoDB.
+- Direct Discord HTTPS webhooks from FastAPI are **optional**. ECS can only
+  inject their Secrets Manager values if the **separate execution role** can
+  read them. The broad EC2 SecretsManager permission does not imply this.
 
-Ticket numbers are generated from independent PostgreSQL sequences:
+**Important:** With webhook injection disabled, orders and support requests
+still work and return `not_configured`/`demo_only`, but no Discord message is
+sent. Do not present Discord as verified until tested end-to-end.
 
-- `ORD-YYYY-NNNNNN`
-- `INV-YYYY-NNNNNN`
-- `SUP-YYYY-NNNNNN`
+## Important files
 
-Prices are looked up by product ID on the server. The browser cannot choose its own price or ticket number. Customer support message contents are stored in PostgreSQL but are not copied into Discord notifications.
+- `.woodpecker/verify.yml`: tests and Kaniko builds for manual/push events
+  on `devops/demo-pipeline`.
+- `ci/demo_poller.py`: localhost Woodpecker API trigger, Git polling and
+  once-per-commit deployment gate.
+- `ci/demo_release.py`: first-build Terraform bootstrap, later Ansible handoff,
+  explicitly confirmed cleanup.
+- `ci/roleless_blue_green.py`, `ansible/ecs-deploy.yml`: safe blue/green deploy.
+- `infrastructure/`: new **separate S3 state root**; existing ECR is data-only.
+- `scripts/bootstrap-s3-state.sh`: pre-demo, explicit state-bucket creation.
+- `docs/DEMO_RUNBOOK.md`: setup, checks, permissions, demo, recovery, cleanup.
+- `backend/app.py`: two stateless API endpoints plus `/health` and `/ready`.
+- `docker-compose.dev.yml`: local NGINX/FastAPI demo, without PostgreSQL.
 
-The API writes notification events to a PostgreSQL transactional outbox. A separate publisher forwards committed events to SQS. A separate worker sends them to Discord and only deletes an SQS message after successful delivery. The SQS redrive policy and DLQ will be configured in Terraform in the infrastructure phase.
+Older `docs/PHASE*.md`, `ci/*release*` notes and old optional Ansible EC2
+bootstrap playbooks are **historical** and do not describe this deployment.
+Use the new demo runbook, not the old phase instructions.
 
-## Local application smoke test
-
-Docker Compose is provided for local UI + API + PostgreSQL development. It does not start the AWS-dependent Discord worker.
+## Quick local checks
 
 ```bash
+python -m pip install -r backend/requirements.txt pytest
+PYTHONPATH=backend python -m pytest -q backend/tests ci/tests
+# Optional locally if Docker is available:
 docker compose -f docker-compose.dev.yml up --build
+# Browser: http://localhost:8080 ; readiness: http://localhost:8080/ready
 ```
 
-Open `http://localhost:8080`. The API is also reachable through the NGINX proxy at `/health` and `/ready`.
+## Read before using AWS
 
-Stop the local stack:
-
-```bash
-docker compose -f docker-compose.dev.yml down
-```
-
-Remove the local database volume only when you intentionally want to delete local demo data:
-
-```bash
-docker compose -f docker-compose.dev.yml down -v
-```
-
-The database password in `docker-compose.dev.yml` is for local development only. Do not reuse it in AWS.
-
-## Python tests
-
-```bash
-python -m pip install -r backend/requirements.txt
-python -m pip install pytest httpx
-PYTHONPATH=backend pytest -q backend/tests
-```
-
-## Required AWS secret names
-
-Create four separate Secrets Manager secrets. Store each as JSON, for example `{"url":"https://discord.com/api/webhooks/..."}`:
-
-- `slicesip/discord/orders`
-- `slicesip/discord/invoices`
-- `slicesip/discord/support`
-- `slicesip/discord/monitoring`
-
-Only the notification worker task role should be allowed to read these secrets. Never commit webhook URLs, credentials, Terraform state or real `.tfvars` files.
-
-## Terraform infrastructure (Phase 3)
-
-The new configuration lives in [`infrastructure/`](infrastructure/). Legacy Terraform,
-EC2 user-data and Lambda-era scripts have been preserved only as references under
-`legacy/` and must **not** be applied or executed. The new Terraform state is not
-interchangeable with the old state: read `docs/PHASE3_AWS_BEGINNER_GUIDE.md` first.
-
-The first plan has the database and application disabled to avoid surprise costs.
-The core network, EC2 CI host, ECR, SQS/DLQ, Secrets Manager secret metadata,
-EventBridge, IAM, ECS cluster and CloudWatch alarms are described in the new root.
-Fargate/ALB/CodeDeploy are enabled only after the initial container images exist.
-All four Discord webhook *values* must be entered manually in Secrets Manager;
-Terraform creates only the secret names, never values.
-
-The Python database connection now supports both `DATABASE_URL` for local
-Docker Compose and `RDS_SECRET_ARN` for ECS managed master credentials.
-
-**No infrastructure has been applied. CI/CD Ansible installation and Woodpecker
-pipeline wiring are the next implementation phase, not yet deployed.**
-
-## Migration status and safety note
-
-The Terraform definitions for the target architecture are drafted in `infrastructure/`, but have NOT been applied to AWS or validated against the live AWS account. Old EC2/Lambda files are retained under `legacy/`; the existing Ansible playbook still needs replacement in the next phase.
-
-**Do not run `terraform apply` until you have read the Phase 3 beginner guide, checked your AWS identity/budget, and reviewed any old AWS resources.** The old local state was NOT copied into this ZIP. Do not apply the new configuration to the old state. A first `terraform plan` inside `infrastructure/` is the safe next step after local setup.
-
-Validation completed in the current environment: Python unit tests and frontend JavaScript syntax checks pass. A live PostgreSQL migration, Docker build, SQS/Discord delivery, Terraform plan and AWS deployment have not yet been run because Docker, PostgreSQL and Terraform are not available in this review environment.
-
-
-### Existing bootcamp EC2 reuse (Phase 3 revision)
-
-The CI machine is now looked up by instance ID, rather than created by this
-Terraform root. Its lifecycle, security group, IAM profile, and networking
-remain under instructor control. See `docs/EXISTING_CI_EC2_CHECKLIST.md`.
-Do not run `terraform apply` until the revised plan and IAM requirements
-have been reviewed.
-
-
-## Phase 4 – CI/CD preparation (not deployed)
-
-New files: `ci/docker-compose.yml`, `ci/woodpecker.env.example`,
-`ci/bootstrap-ansible-ubuntu.sh`, `.woodpecker/verify.yml`, and an expanded
-`ansible/playbook.yml`. See `docs/PHASE4_CI_ANSIBLE_BEGINNER_GUIDE.md`.
-
-The CI server remains private and disabled until the bootcamp AMI, old Docker
-containers, HTTPS address and OAuth secrets are confirmed. **Do not apply Terraform
-or start Woodpecker yet.** The safe first pipeline currently runs tests only; it
-does not yet build images or perform blue/green deployments.
-
-### Phase 4A – Existing Docker reuse (2026-11-12)
-
-The verified bootcamp EC2 already has Ubuntu 22.04, Docker CE, Docker Compose, Ansible and Git. The updated `ansible/playbook.yml` does **not** install or upgrade any packages; it only checks prerequisites and stages Woodpecker configuration, without starting containers by default. Read `docs/PHASE4A_SAFE_EC2_SETUP.md` before transfer or execution.
+Read [`docs/DEMO_RUNBOOK.md`](docs/DEMO_RUNBOOK.md). **Do not run
+`terraform apply` or arm the poller before its preflight gates are satisfied.**
+This build was tested offline only; live AWS resources and network routes
+must be verified in the bootcamp environment before presenting.

@@ -1,45 +1,25 @@
 ---
-# Phase 6D: standalone, opt-in ECS deployment playbook.
-# This is NOT connected to the Woodpecker build pipeline yet.
-- name: Preview or explicitly deploy Slice and Sip to ECS Fargate
+# Host-only AWS deployment through the existing EC2 instance profile.
+- name: Health-gated Slice and Sip roleless blue/green deployment
   hosts: localhost
   connection: local
   gather_facts: false
-  become: false
   vars:
-    aws_region: eu-west-1
-    project_name: slice-sip
     image_tag: ""
     deploy_enabled: false
-    deploy_confirmation: ""
-    deploy_worker: false
-
   tasks:
-    - name: Require a versioned image tag and explicit deployment confirmation
+    - name: Require immutable image tag
       ansible.builtin.assert:
         that:
           - image_tag is match('^[0-9a-f]{40}-[1-9][0-9]*$')
-          - (not (deploy_enabled | bool)) or deploy_confirmation == 'DEPLOY_SLICE_SIP'
-        fail_msg: >-
-          Supply -e image_tag=<40-character-sha>-<pipeline-number>.
-          Live deployment additionally requires -e deploy_enabled=true
-          -e deploy_confirmation=DEPLOY_SLICE_SIP.
-
-    - name: Run preflight, or deploy only when explicitly enabled
+    - name: Preview or deploy the inactive ECS service
       ansible.builtin.command:
-        argv: >-
-          {{ ['python3', playbook_dir + '/../ci/ecs_deploy.py',
-              '--region', aws_region, '--project', project_name,
-              '--tag', image_tag]
-              + (['--include-worker'] if (deploy_worker | bool) else [])
-              + (['--deploy'] if (deploy_enabled | bool) else []) }}
+        argv: "{{ ['python3', playbook_dir + '/../ci/roleless_blue_green.py', '--tag', image_tag] + (['--deploy'] if (deploy_enabled | bool) else []) }}"
       environment:
-        # Use the updated AWS CLI for ECS native blue/green API support.
-        # Applies to this task only; does not change the system default CLI.
         PATH: /opt/slice-sip/bin:/usr/local/bin:/usr/bin:/bin
-      register: ecs_deployment_result
-      changed_when: (deploy_enabled | bool) and ("Requested ECS deployment:" in ecs_deployment_result.stdout)
-
-    - name: Display the non-sensitive summary
+        SLICE_SIP_TF_DIR: "{{ playbook_dir }}/../infrastructure"
+      register: deployment
+      changed_when: (deploy_enabled | bool) and ('SUCCESS:' in deployment.stdout)
+    - name: Show outcome
       ansible.builtin.debug:
-        var: ecs_deployment_result.stdout_lines
+        var: deployment.stdout_lines

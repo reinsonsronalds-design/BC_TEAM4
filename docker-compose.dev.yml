@@ -1,35 +1,14 @@
-# Local development stack for the Slice & Sip UI, API and PostgreSQL.
-# Discord delivery is an AWS integration and is not started in local mode.
+# Local development ONLY: stateless API + NGINX (no database or SQS).
 services:
-  database:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_DB: slicesip
-      POSTGRES_USER: slicesip
-      POSTGRES_PASSWORD: local-development-only
-    volumes:
-      - slicesip-postgres:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U slicesip -d slicesip"]
-      interval: 5s
-      timeout: 3s
-      retries: 15
-
   backend:
     build:
       context: ./backend
-    command: ["sh", "-c", "python migrate.py && uvicorn app:app --host 0.0.0.0 --port 8000"]
-    environment:
-      DATABASE_URL: postgresql://slicesip:local-development-only@database:5432/slicesip
+    command: ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=2)"]
       interval: 10s
       timeout: 3s
       retries: 10
-    depends_on:
-      database:
-        condition: service_healthy
-
   frontend:
     build:
       context: .
@@ -41,6 +20,3 @@ services:
     depends_on:
       backend:
         condition: service_healthy
-
-volumes:
-  slicesip-postgres:

@@ -1,0 +1,7 @@
+# LOCAL FILE ONLY on EC2: /etc/slice-sip-ci/state.hcl (0600)
+# S3 bucket must ALREADY exist, have versioning, and be approved for this project.
+bucket = "REPLACE-WITH-APPROVED-VERSIONED-BUCKET"
+key = "slice-sip/demo-fargate/terraform.tfstate"
+region = "eu-west-1"
+encrypt = true
+use_lockfile = true

@@ -1,0 +1,16 @@
+[Unit]
+Description=Slice & Sip Git polling -> Woodpecker -> ECS demo
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/slice-sip-demo
+ExecStart=/usr/bin/python3 /opt/slice-sip-demo/ci/demo_poller.py --watch --execute
+Restart=on-failure
+RestartSec=10
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

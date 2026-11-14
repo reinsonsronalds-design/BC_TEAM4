@@ -83,7 +83,7 @@ def main():
     secret = {
         "name": SECRET_NAME,
         "value": password,
-        "events": ["push"],
+        "events": ["push", "manual"],
         "images": [PLUGIN_IMAGE],
     }
     rc, _ = request("GET", f"/repos/{repo_id}/secrets/{SECRET_NAME}", api_token)
@@ -96,7 +96,7 @@ def main():
     result, _ = request(method, path, api_token, secret)
     if result not in (200, 201, 204):
         raise RuntimeError(f"Woodpecker secret update failed: HTTP {result}")
-    print("Woodpecker ECR registry secret refreshed; restricted to push + pinned Kaniko plugin")
+    print("Woodpecker ECR registry secret refreshed; restricted to push/manual + pinned Kaniko plugin")
 
 
 if __name__ == "__main__":

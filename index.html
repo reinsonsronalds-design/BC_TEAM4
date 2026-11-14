@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Slice & Sip - Food Delivery & Microservices Demo</title>
+    <title>Slice & Sip - DevOps CI/CD Demonstration</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Font Awesome Icons -->
@@ -88,7 +88,7 @@
                     Crafted Food, <br><span class="whitespace-nowrap bg-clip-text bg-gradient-to-r from-brand-400 to-amber-300">Decoupled Microservices.</span>
                 </h1>
                 <p class="text-slate-400 text-base md:text-lg mb-6 leading-relaxed">
-                    Order artisanal dishes through a containerized application on AWS. Orders, invoices and support requests are handled by the backend and monitored through Discord.
+                    Order artisanal dishes through a containerized application on AWS. Demo orders, invoices and support requests are handled without a database; Discord webhooks are optional.
                 </p>
             </div>
         </section>
@@ -214,7 +214,7 @@
                         <span class="w-3 h-3 rounded-full bg-yellow-500/80 inline-block"></span>
                         <span class="w-3 h-3 rounded-full bg-green-500/80 inline-block"></span>
                     </div>
-                    <span class="text-xs font-mono text-slate-400 ml-2">microservices-inter-service-bus.log</span>
+                    <span class="text-xs font-mono text-slate-400 ml-2">stateless-api-events.log</span>
                 </div>
                 <div class="flex items-center space-x-3">
                     <span class="text-xs font-mono text-slate-400">Target: <span class="text-brand-400">AWS ALB → ECS</span></span>
@@ -304,7 +304,7 @@
             </div>
             <div class="p-6 bg-slate-950 border-t border-slate-800 text-xs text-slate-400 leading-relaxed">
                 <i class="fa-solid fa-circle-info text-indigo-400 mr-1"></i>
-                Your request is saved by the Slice & Sip API. A support ticket is created and a notification is queued for the #support Discord channel.
+                This is a demo: the API generates a support reference without storing data and attempts a direct Discord webhook notification when configured.
             </div>
         </div>
     </div>
@@ -462,9 +462,9 @@
 
                 lastOrderId = result.order_ticket;
                 document.getElementById('support-order-id').value = result.order_ticket;
-                logToTerminal(`Order saved: ${result.order_ticket}`, 'main');
+                logToTerminal(`Demo order generated: ${result.order_ticket}`, 'main');
                 logToTerminal(`Invoice created: ${result.invoice_ticket} | Total: $${Number(result.total_amount).toFixed(2)}`, 'invoice');
-                logToTerminal('Order and invoice notifications saved to the transactional outbox.', 'notify');
+                logToTerminal(`Discord webhook delivery: ${result.notification_status}`, 'notify');
 
                 cart = [];
                 updateCartUI();
@@ -515,7 +515,7 @@
                 }
 
                 logToTerminal(`Support ticket created: ${result.support_ticket}`, 'support');
-                logToTerminal('Support notification saved to the transactional outbox.', 'notify');
+                logToTerminal(`Discord webhook delivery: ${result.notification_status}`, 'notify');
                 form.reset();
                 toggleSupportModal();
                 showToast(`Support ticket ${result.support_ticket} created.`);
